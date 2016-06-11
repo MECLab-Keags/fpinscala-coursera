@@ -41,12 +41,12 @@ abstract class TweetSet {
    * Question: Can we implment this method here, or should it remain abstract
    * and be implemented in the subclasses?
    */
-    def filter(p: Tweet => Boolean): TweetSet = ???
+  def filter(p: Tweet => Boolean): TweetSet
   
   /**
-   * This is a helper method for `filter` that propagetes the accumulated tweets.
+   * This is a helper method for `filter` that propagates the accumulated tweets.
    */
-  def filterAcc(p: Tweet => Boolean, acc: TweetSet): TweetSet
+  def filterAcc(p: Tweet => Boolean, acc: TweetSet): TweetSet = fold[TweetSet](List(this), acc)((ts, tss) => ts.tweet :: ts.leftTweetSet :: ts.rightTweetSet :: tss)((ts, t) => if(p(t)) ts.incl(t) else ts)
 
   /**
    * Returns a new `TweetSet` that is the union of `TweetSet`s `this` and `that`.
@@ -54,7 +54,7 @@ abstract class TweetSet {
    * Question: Should we implment this method here, or should it remain abstract
    * and be implemented in the subclasses?
    */
-    def union(that: TweetSet): TweetSet = ???
+  def union(that: TweetSet): TweetSet = fold[TweetSet](List(this, that), new Empty)((ts, tss) => ts.tweet :: ts.leftTweetSet :: ts.rightTweetSet :: tss)((ts, t) => ts.incl(t))
   
   /**
    * Returns the tweet from this set which has the greatest retweet count.
@@ -65,7 +65,7 @@ abstract class TweetSet {
    * Question: Should we implment this method here, or should it remain abstract
    * and be implemented in the subclasses?
    */
-    def mostRetweeted: Tweet = ???
+  def mostRetweeted: Tweet = ???
   
   /**
    * Returns a list containing all tweets of this set, sorted by retweet count
@@ -76,7 +76,7 @@ abstract class TweetSet {
    * Question: Should we implment this method here, or should it remain abstract
    * and be implemented in the subclasses?
    */
-    def descendingByRetweet: TweetList = ???
+  def descendingByRetweet: TweetList = ???
   
   /**
    * The following methods are already implemented
@@ -104,11 +104,23 @@ abstract class TweetSet {
    * This method takes a function and applies it to every element in the set.
    */
   def foreach(f: Tweet => Unit): Unit
+
+  def foldRight[A](acc: => A)(f: (Tweet, A) => A) : A = acc
+
+  def foldLeft[A](z: => A)(op: (A, Tweet) => A) : A = z
+
+  def fold[A](as: List[Any], acc: => A)(f: (NonEmpty, List[Any]) => List[Any])(op: (A, Tweet) => A) : A = as match {
+    case (head:NonEmpty) :: tail  => fold(f(head, tail), acc)(f)(op)
+    case (head:Tweet) :: tail => fold(tail, op(acc, head))(f)(op)
+    case (head:Empty) :: tail => fold(tail, acc)(f)(op)
+    case _ => acc
+  }
 }
 
 class Empty extends TweetSet {
-    def filterAcc(p: Tweet => Boolean, acc: TweetSet): TweetSet = ???
-  
+
+  override def filter(p: Tweet => Boolean): TweetSet = this
+
   /**
    * The following methods are already implemented
    */
@@ -123,10 +135,10 @@ class Empty extends TweetSet {
 }
 
 class NonEmpty(elem: Tweet, left: TweetSet, right: TweetSet) extends TweetSet {
+  val tweet: Tweet = elem
+  val leftTweetSet = left
+  val rightTweetSet = right
 
-    def filterAcc(p: Tweet => Boolean, acc: TweetSet): TweetSet = ???
-  
-    
   /**
    * The following methods are already implemented
    */
@@ -152,6 +164,85 @@ class NonEmpty(elem: Tweet, left: TweetSet, right: TweetSet) extends TweetSet {
     left.foreach(f)
     right.foreach(f)
   }
+
+  override def foldRight[A](acc: => A)(f: (Tweet, A) => A) : A = f(elem, (left union right).foldRight(acc)(f))
+
+  override def foldLeft[A](acc: => A)(op: (A, Tweet) => A) : A = {
+    val acc1 = op(acc, elem)
+    val acc2 = left.foldLeft(acc1)(op)
+    val acc3 = right.foldLeft(acc2)(op)
+    acc3
+  }
+
+  /**
+    * This method takes a predicate and returns a subset of all the elements
+    * in the original set for which the predicate is true.
+    *
+    * Question: Can we implment this method here, or should it remain abstract
+    * and be implemented in the subclasses?
+  */
+  override def filter(p: Tweet => Boolean): TweetSet = filterAcc(p, new Empty)
+
+  def filter3(p: Tweet => Boolean): TweetSet = fold[TweetSet](List(this), new Empty)((ts:NonEmpty, tss:List[Any]) => ts.tweet :: ts.leftTweetSet :: ts.rightTweetSet :: tss)((acc, t) => t match {
+    case t if(p(t)) => acc.incl(t)
+    case _ => acc
+  })
+
+  def filter2(p: Tweet => Boolean): TweetSet = foldLeft[TweetSet](new Empty)((ts, t) => t match {
+    case t if(p(t)) => ts.incl(t)
+    case _ => ts
+  })
+
+  def filter1(p: Tweet => Boolean): TweetSet = foldRight((new Empty) : TweetSet)((t,acc) => t match {
+    case t if(p(t)) => acc.incl(t).union(left.filter(p)).union(right.filter(p))
+    case _ => left.filter(p).union(right.filter(p))
+  })
+
+  def union1(that: TweetSet) : TweetSet = ((left union right) union that) incl elem
+
+  override def mostRetweeted: Tweet = fold(List(this), this.tweet)((ts, tss) => ts.tweet :: ts.leftTweetSet :: ts.rightTweetSet :: tss)((curr, t) => if(t.retweets > curr.retweets) t else curr)
+
+  def mostRetweeted2: Tweet = foldLeft(elem)((that, t) => t match {
+    case x if(x.retweets > that.retweets) => x
+    case _ => that
+  })
+
+  def mostRetweeted1: Tweet = foldRight(this.elem)((t, that) => t match {
+    case x if(x.retweets > that.retweets) => x
+    case _ => that
+  })
+
+  override def descendingByRetweet: TweetList = fold[TweetList](List(this), Nil)((ts, tss) => ts.tweet :: ts.leftTweetSet :: ts.rightTweetSet :: tss)((acc,t) => acc match {
+    case Nil => new Cons(t, acc)
+    case Cons(head, tail) if(head.retweets > t.retweets) => {
+      val x = new Cons(t, tail.filter(c => c.retweets < t.retweets)) append new Cons(head, tail.filter(c => c.retweets > t.retweets))
+      print("head gt curr = head:" + head.retweets + " curr:" + t.retweets + " tail:");println(x.foreach(c => print(c.retweets)))
+      x
+    }
+    case Cons(head, tail) => {
+      val x = new Cons(t, new Cons(head, tail.filter(c => c.retweets < t.retweets))) append tail.filter(c => c.retweets > t.retweets)
+      print("head gt curr = head:" + head.retweets + " curr:" + t.retweets + " tail:");println(x.foreach(c => print(c.retweets)))
+      x
+    }
+  })
+
+  def descendingByRetweet3: TweetList = fold[TweetList](List(this), Nil)((ts, tss) => ts.tweet :: ts.leftTweetSet :: ts.rightTweetSet :: tss)((acc,t) => acc match {
+    case Nil => new Cons(t, Nil)
+    case Cons(head, tail) if(head.retweets > t.retweets) => new Cons(head, new Cons(t,tail))
+    case Cons(head, tail) => new Cons(t, acc)
+  })
+
+  def descendingByRetweet2: TweetList = foldLeft[TweetList](Nil)((acc, t) => acc match {
+    case Nil => new Cons(t, Nil)
+    case Cons(head, tail) if(head.retweets < t.retweets) => new Cons(t, acc)
+    case Cons(head, tail) => new Cons(head, new Cons(t, tail))
+  })
+
+  def descendingByRetweet1: TweetList = foldRight[TweetList](objsets.Nil)((t,acc) => acc match {
+    case Nil => new Cons(t, Nil)
+    case Cons(head, tail) if(head.retweets < this.elem.retweets) => new Cons(this.elem, new Cons(head, tail))
+    case tl => new Cons(tl.head, new Cons(this.elem, tl.tail))
+  })
 }
 
 trait TweetList {
@@ -163,32 +254,41 @@ trait TweetList {
       f(head)
       tail.foreach(f)
     }
-}
 
-object Nil extends TweetList {
+  @annotation.tailrec
+  final def foldLeft(tl: TweetList)(acc: TweetList)(f: (TweetList, Tweet) => TweetList) : TweetList = tl match {
+    case Cons(head, tail) => foldLeft(tail)(f(acc, head))(f)
+    case _ => acc
+  }
+
+  def filter(p: Tweet => Boolean) = foldLeft(this)(Nil)((acc, t) => if(p(t)) new Cons(t, acc) else acc)
+
+  def append(rest: TweetList): TweetList = foldLeft(this)(rest)((acc, t) => new Cons(t, acc))
+  //def union(rest: => TweetList) : TweetList = if(isEmpty) rest else Cons(head, tail union rest)
+}
+case object Nil extends TweetList {
   def head = throw new java.util.NoSuchElementException("head of EmptyList")
   def tail = throw new java.util.NoSuchElementException("tail of EmptyList")
   def isEmpty = true
 }
-
-class Cons(val head: Tweet, val tail: TweetList) extends TweetList {
+case class Cons(val head: Tweet, val tail: TweetList) extends TweetList {
   def isEmpty = false
 }
-
 
 object GoogleVsApple {
   val google = List("android", "Android", "galaxy", "Galaxy", "nexus", "Nexus")
   val apple = List("ios", "iOS", "iphone", "iPhone", "ipad", "iPad")
 
-    lazy val googleTweets: TweetSet = ???
-  lazy val appleTweets: TweetSet = ???
+  def search(ts: TweetSet)(keyword: List[String]) : TweetSet = ts.filter(t => t.text.split(' ').exists(word => keyword.exists(key => key == word)))
+  lazy val googleTweets: TweetSet = search(TweetReader.allTweets)(google)
+  lazy val appleTweets: TweetSet = search(TweetReader.allTweets)(apple)
   
   /**
    * A list of all tweets mentioning a keyword from either apple or google,
    * sorted by the number of retweets.
    */
-     lazy val trending: TweetList = ???
-  }
+  lazy val trending: TweetList = (googleTweets union appleTweets) descendingByRetweet
+}
 
 object Main extends App {
   // Print the trending tweets

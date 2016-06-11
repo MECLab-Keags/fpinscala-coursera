@@ -71,4 +71,17 @@ class TweetSetSuite extends FunSuite {
     }
   }
 
+  test("mostRetweeted: user = a") {
+    new TestSets {
+      val set = set1.union(set2).union(set3).union(set4c).union(set4d).union(set5)
+      //val tweet = set.foldRight(0)((t,acc) => if(t.retweets > acc) t.retweets else acc)
+      val tweet = set.mostRetweeted
+      assert(tweet.user == "a")
+    }
   }
+
+  test("descending: test") {
+    val ts = GoogleVsApple.appleTweets.descendingByRetweet
+
+  }
+}
