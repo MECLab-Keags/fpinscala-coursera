@@ -4,8 +4,10 @@ trait List[+T] {
     def isEmpty: Boolean
     def head: T
     def tail: List[T]
+
+    def prepend[U >: T](elem: U): List[U] = new Cons(elem, this)
 }
-case class Cons[T](val head: T, val tail:List[T]) extends List[T]{
+case class Cons[T](head: T, tail:List[T]) extends List[T]{
     def isEmpty = false
 }
 case object Nil extends List[Nothing]{
