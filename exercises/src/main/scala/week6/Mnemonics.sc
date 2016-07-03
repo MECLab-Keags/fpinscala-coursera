@@ -27,5 +27,3 @@ def translate(encoded: Set[List[String]]) : Set[String] = encoded map (_ mkStrin
 wordCode("JAVA")
 wordCode("Java")
 translate(encode("7225247386"))
-
-
