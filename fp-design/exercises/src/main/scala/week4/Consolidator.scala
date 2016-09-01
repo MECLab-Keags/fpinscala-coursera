@@ -1,6 +1,6 @@
 package week4
 
-class Consolidator(observed: List[BankAccount]) extends Subscriber {
+class Consolidator(observed: List[ObservableBankAccount]) extends Subscriber {
   observed foreach(_.subscribe(this))
 
   private var total: Int = compute()

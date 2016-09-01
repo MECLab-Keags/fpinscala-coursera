@@ -1,6 +1,6 @@
 package week4
 
-class BankAccount extends Publisher {
+class ObservableBankAccount extends Publisher {
   private var balance = 0
 
   def currentBalance = balance
