@@ -18,3 +18,6 @@ project/plugins/project/
 
 # IntelliJ IDEA specific
 .idea/
+
+# environment specific (mac os x)
+.ds_store
